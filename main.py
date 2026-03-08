@@ -19,50 +19,74 @@ prices = {
     "Move out cleaning": {"1":200,"2":250,"3":300}
 }
 
-# -------- INVOICE -------- #
+# ---------- INVOICE ----------
 
 def create_invoice(data):
 
     invoice_number = random.randint(1000,9999)
-
     filename = f"invoice_{invoice_number}.pdf"
 
     c = canvas.Canvas(filename)
 
-    c.setFont("Helvetica-Bold",16)
-    c.drawString(200,800,"CLEANING PROS TEAM")
+    c.setFont("Helvetica-Bold",22)
+    c.drawCentredString(300,810,"CLEANING PROS TEAM")
 
-    c.setFont("Helvetica",12)
-    c.drawString(200,780,"Professional Cleaning Service")
+    c.setFont("Helvetica",11)
+    c.drawCentredString(300,790,"Phone: 253-202-0979")
+    c.drawCentredString(300,775,"Email: manager@excellentsolution.online")
 
-    c.setFont("Helvetica-Bold",14)
+    c.line(50,760,550,760)
+
+    c.setFont("Helvetica-Bold",18)
     c.drawString(50,730,"INVOICE")
 
     c.setFont("Helvetica",12)
+    c.drawString(50,705,f"Invoice #: {invoice_number}")
+    c.drawString(400,705,f"Date: {datetime.now().strftime('%b %d %Y')}")
 
-    c.drawString(50,700,f"Invoice #: {invoice_number}")
-    c.drawString(50,680,f"Date: {datetime.now().strftime('%B %d %Y')}")
+    c.setFont("Helvetica-Bold",14)
+    c.drawString(50,660,"Customer Information")
 
-    c.drawString(50,640,"Customer:")
-
+    c.setFont("Helvetica",12)
+    c.drawString(50,640,f"Name: {data['name']}")
     c.drawString(50,620,f"Phone: {data['phone']}")
-    c.drawString(50,600,f"Location: {data.get('location','N/A')}")
+    c.drawString(50,600,f"Address: {data['address']}")
+    c.drawString(50,580,f"Cleaning Date: {data['date']}")
 
-    c.drawString(50,560,"Service:")
+    c.setFont("Helvetica-Bold",14)
+    c.drawString(50,540,"Service Details")
 
-    c.drawString(50,540,f"Cleaning: {data['cleaning']}")
-    c.drawString(50,520,f"Bedrooms: {data['bedrooms']}")
+    c.line(50,520,550,520)
 
     c.setFont("Helvetica-Bold",12)
-    c.drawString(50,480,f"Total: ${data['price']}")
+    c.drawString(50,500,"Service")
+    c.drawString(260,500,"Bedrooms")
+    c.drawString(450,500,"Price")
 
-    c.drawString(50,440,"Thank you for choosing Cleaning Pros Team!")
+    c.line(50,490,550,490)
+
+    c.setFont("Helvetica",12)
+    c.drawString(50,470,data['cleaning'])
+    c.drawString(280,470,data['bedrooms'])
+    c.drawString(450,470,f"${data['price']}")
+
+    c.line(50,450,550,450)
+
+    c.setFont("Helvetica-Bold",15)
+    c.drawString(350,420,"TOTAL:")
+    c.drawString(450,420,f"${data['price']}")
+
+    c.line(50,400,550,400)
+
+    c.setFont("Helvetica",11)
+    c.drawCentredString(300,370,"Thank you for choosing Cleaning Pros Team!")
 
     c.save()
 
     return filename
 
-# -------- START -------- #
+
+# ---------- START ----------
 
 @bot.message_handler(commands=['start'])
 def start(message):
@@ -71,21 +95,21 @@ def start(message):
 
     markup.add("🧹 Book cleaning")
     markup.add("💰 Prices","📞 Contact")
+    markup.add("📅 Change booking","❌ Cancel booking")
 
     bot.send_message(
         message.chat.id,
-        "Welcome to Cleaning Pros Team 🧼\n\nChoose option:",
+        "Welcome to Cleaning Pros Team 🧼",
         reply_markup=markup
     )
 
-# -------- PRICE -------- #
+
+# ---------- PRICES ----------
 
 @bot.message_handler(func=lambda m: m.text == "💰 Prices")
-def price(message):
+def prices_list(message):
 
     text = """
-💰 CLEANING PRICES
-
 Regular cleaning
 1 bedroom — $120
 2 bedroom — $150
@@ -104,24 +128,23 @@ Move out cleaning
 
     bot.send_message(message.chat.id,text)
 
-# -------- CONTACT -------- #
+
+# ---------- CONTACT ----------
 
 @bot.message_handler(func=lambda m: m.text == "📞 Contact")
 def contact(message):
 
     text = """
-📞 Cleaning Pros Team
+Cleaning Pros Team
 
-Phone: +1 (253) 202-0979
-
-Service area: Washington
-
-We will contact you to confirm time after booking.
+Phone: 253-202-0979
+Email: manager@excellentsolution.online
 """
 
     bot.send_message(message.chat.id,text)
 
-# -------- BOOK CLEANING -------- #
+
+# ---------- BOOK CLEANING ----------
 
 @bot.message_handler(func=lambda m: m.text == "🧹 Book cleaning")
 def book(message):
@@ -138,7 +161,8 @@ def book(message):
 
     bot.send_message(chat_id,"Choose cleaning type",reply_markup=markup)
 
-# -------- CLEANING TYPE -------- #
+
+# ---------- CLEANING TYPE ----------
 
 @bot.message_handler(func=lambda m: m.text in prices)
 def cleaning_type(message):
@@ -153,7 +177,8 @@ def cleaning_type(message):
 
     bot.send_message(chat_id,"How many bedrooms?",reply_markup=markup)
 
-# -------- BEDROOMS -------- #
+
+# ---------- BEDROOMS ----------
 
 @bot.message_handler(func=lambda m: m.text in ["1","2","3"])
 def bedrooms(message):
@@ -161,7 +186,6 @@ def bedrooms(message):
     chat_id = message.chat.id
 
     bedrooms = message.text
-
     cleaning = user_data[chat_id]["cleaning"]
 
     price = prices[cleaning][bedrooms]
@@ -169,33 +193,48 @@ def bedrooms(message):
     user_data[chat_id]["bedrooms"] = bedrooms
     user_data[chat_id]["price"] = price
 
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    bot.send_message(chat_id,f"Estimated price: ${price}")
 
-    button = types.KeyboardButton("Send location 📍",request_location=True)
+    bot.send_message(chat_id,"Send cleaning date (example: March 15)")
 
-    markup.add(button)
 
-    bot.send_message(
-        chat_id,
-        f"Estimated price: ${price}\n\nSend address or location",
-        reply_markup=markup
-    )
+# ---------- DATE ----------
 
-# -------- LOCATION -------- #
-
-@bot.message_handler(content_types=['location'])
-def location(message):
+@bot.message_handler(func=lambda m: "date" not in user_data.get(m.chat.id, {}))
+def date(message):
 
     chat_id = message.chat.id
 
-    if chat_id not in user_data:
-        user_data[chat_id] = {}
+    user_data[chat_id]["date"] = message.text
 
-    user_data[chat_id]["location"] = f"{message.location.latitude},{message.location.longitude}"
+    bot.send_message(chat_id,"Send your address")
+
+
+# ---------- ADDRESS ----------
+
+@bot.message_handler(func=lambda m: "address" not in user_data.get(m.chat.id, {}))
+def address(message):
+
+    chat_id = message.chat.id
+
+    user_data[chat_id]["address"] = message.text
+
+    bot.send_message(chat_id,"What is your name?")
+
+
+# ---------- NAME ----------
+
+@bot.message_handler(func=lambda m: "name" not in user_data.get(m.chat.id, {}))
+def name(message):
+
+    chat_id = message.chat.id
+
+    user_data[chat_id]["name"] = message.text
 
     bot.send_message(chat_id,"Send phone number")
 
-# -------- PHONE -------- #
+
+# ---------- PHONE ----------
 
 @bot.message_handler(func=lambda m: m.text.isdigit())
 def phone(message):
@@ -204,31 +243,10 @@ def phone(message):
 
     user_data[chat_id]["phone"] = message.text
 
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-
-    markup.add("Skip photo")
-
-    bot.send_message(chat_id,"Send photos or Skip",reply_markup=markup)
-
-# -------- SKIP PHOTO -------- #
-
-@bot.message_handler(func=lambda m: m.text == "Skip photo")
-def skip_photo(message):
-
     finalize_booking(message)
 
-# -------- PHOTO -------- #
 
-@bot.message_handler(content_types=['photo'])
-def photo(message):
-
-    chat_id = message.chat.id
-
-    bot.forward_message(ADMIN_ID,chat_id,message.message_id)
-
-    finalize_booking(message)
-
-# -------- FINALIZE -------- #
+# ---------- FINALIZE ----------
 
 def finalize_booking(message):
 
@@ -236,19 +254,21 @@ def finalize_booking(message):
 
     data = user_data.get(chat_id)
 
-    if not data:
-        return
-
     text = f"""
-🧼 NEW CLEANING REQUEST
+NEW BOOKING
+
+Name: {data['name']}
+Phone: {data['phone']}
 
 Cleaning: {data['cleaning']}
 Bedrooms: {data['bedrooms']}
+
+Date: {data['date']}
+
+Address:
+{data['address']}
+
 Price: ${data['price']}
-
-Location: {data.get('location','not sent')}
-
-Phone: {data['phone']}
 """
 
     bot.send_message(ADMIN_ID,text)
@@ -259,11 +279,24 @@ Phone: {data['phone']}
 
         bot.send_document(chat_id,f)
 
-    bot.send_message(
-        chat_id,
-        "✅ Thank you! Your request has been sent.\n\nWe will contact you soon."
-    )
+    bot.send_message(chat_id,"✅ Booking confirmed!")
 
     user_data.pop(chat_id)
+
+
+# ---------- CANCEL ----------
+
+@bot.message_handler(func=lambda m: m.text == "❌ Cancel booking")
+def cancel(message):
+
+    bot.send_message(message.chat.id,"Booking cancelled.")
+
+
+# ---------- CHANGE DATE ----------
+
+@bot.message_handler(func=lambda m: m.text == "📅 Change booking")
+def change(message):
+
+    bot.send_message(message.chat.id,"Send new cleaning date")
 
 bot.infinity_polling()
