@@ -19,15 +19,15 @@ prices = {
 
 def main_menu(user_id=None):
 
-    m = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
 
-    m.add("🧹 Book cleaning")
-    m.add("💲 Prices","📞 Contact")
+    kb.add("🧹 Book cleaning")
+    kb.add("💲 Prices","📞 Contact")
 
     if user_id == ADMIN_ID:
-        m.add("⚙ Admin panel")
+        kb.add("⚙ Admin panel")
 
-    return m
+    return kb
 
 
 @bot.message_handler(commands=['start'])
@@ -41,7 +41,7 @@ def start(message):
 
 
 @bot.message_handler(func=lambda m: m.text == "💲 Prices")
-def prices_menu(message):
+def prices(message):
 
     bot.send_message(
         message.chat.id,
@@ -115,6 +115,7 @@ def date_step(message):
     user_data[chat]["price"] = price
 
     today = datetime.now()
+
     d1 = (today + timedelta(days=1)).strftime("%b %d")
     d2 = (today + timedelta(days=2)).strftime("%b %d")
 
@@ -125,56 +126,37 @@ def date_step(message):
     bot.send_message(chat,f"Estimated price ${price}\nChoose date",reply_markup=kb)
 
 
-@bot.message_handler(func=lambda m: True)
-def extras(message):
+@bot.message_handler(func=lambda m: m.text in ["Inside fridge","Inside oven","No extras"])
+def address_step(message):
 
     chat = message.chat.id
 
-    if chat not in user_data:
-        return
+    user_data[chat]["extras"] = message.text
 
-    if "date" not in user_data[chat]:
-
-        user_data[chat]["date"] = message.text
-
-        kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        kb.add("Inside fridge")
-        kb.add("Inside oven")
-        kb.add("No extras")
-
-        bot.send_message(chat,"Add extras?",reply_markup=kb)
-
-        return
+    bot.send_message(chat,"Send address")
 
 
-    if "extras" not in user_data[chat]:
+@bot.message_handler(func=lambda m: m.text and m.chat.id in user_data and "address" not in user_data[m.chat.id] and "extras" in user_data[m.chat.id])
+def phone_step(message):
 
-        user_data[chat]["extras"] = message.text
+    chat = message.chat.id
 
-        bot.send_message(chat,"Send address")
+    user_data[chat]["address"] = message.text
 
-        return
-
-
-    if "address" not in user_data[chat]:
-
-        user_data[chat]["address"] = message.text
-
-        bot.send_message(chat,"Send phone number")
-
-        return
+    bot.send_message(chat,"Send phone number")
 
 
-    if "phone" not in user_data[chat]:
+@bot.message_handler(func=lambda m: m.text and m.chat.id in user_data and "phone" not in user_data[m.chat.id] and "address" in user_data[m.chat.id])
+def photo_step(message):
 
-        user_data[chat]["phone"] = message.text
+    chat = message.chat.id
 
-        kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        kb.add("Skip photo")
+    user_data[chat]["phone"] = message.text
 
-        bot.send_message(chat,"Send photos or Skip",reply_markup=kb)
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    kb.add("Skip photo")
 
-        return
+    bot.send_message(chat,"Send photo or Skip",reply_markup=kb)
 
 
 @bot.message_handler(func=lambda m: m.text == "Skip photo")
@@ -194,6 +176,7 @@ def photo(message):
 def finalize_booking(message):
 
     chat = message.chat.id
+
     data = user_data.get(chat)
 
     if not data:
