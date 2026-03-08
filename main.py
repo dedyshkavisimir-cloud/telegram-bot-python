@@ -167,9 +167,12 @@ def location(message):
 
     chat_id = message.chat.id
 
+    if chat_id not in user_data:
+        user_data[chat_id] = {}
+
     user_data[chat_id]["location"] = f"{message.location.latitude},{message.location.longitude}"
 
-    bot.send_message(chat_id,"Send phone number")
+    bot.send_message(chat_id, "Send phone number")
 
 # SKIP PHOTO
 
