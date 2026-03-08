@@ -2,6 +2,8 @@ import telebot
 from telebot import types
 import os
 
+print("NEW VERSION RUNNING")
+
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 ADMIN_ID = 146998462  # сюда потом поставим твой Telegram ID
