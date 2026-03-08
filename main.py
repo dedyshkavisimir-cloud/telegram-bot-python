@@ -3,27 +3,27 @@ from telebot import types
 from datetime import datetime, timedelta
 
 from config import TOKEN, ADMIN_ID
-from storage import load_bookings, save_bookings, get_booking_counter
+from storage import load_bookings, save_booking
 from invoice import create_invoice
-
 
 bot = telebot.TeleBot(TOKEN)
 
 user_data = {}
 
 prices = {
-"Regular cleaning":{"1":120,"2":150,"3":180},
-"Deep cleaning":{"1":180,"2":220,"3":260},
-"Move out cleaning":{"1":200,"2":250,"3":300}
+    "Regular cleaning": {"1":120,"2":150,"3":180},
+    "Deep cleaning": {"1":180,"2":220,"3":260},
+    "Move out cleaning": {"1":200,"2":250,"3":300}
 }
 
+# ---------- MAIN MENU ----------
 
 def main_menu(user_id=None):
 
     m = types.ReplyKeyboardMarkup(resize_keyboard=True)
 
     m.add("🧹 Book cleaning")
-    m.add("💰 Prices", "📞 Contact")
+    m.add("💰 Prices","📞 Contact")
 
     if user_id == ADMIN_ID:
         m.add("⚙️ Admin panel")
@@ -31,21 +31,26 @@ def main_menu(user_id=None):
     return m
 
 
+# ---------- START ----------
+
 @bot.message_handler(commands=['start'])
 def start(message):
 
     bot.send_message(
         message.chat.id,
-        "Welcome to Cleaning Pros Team! 🧼\n\nWhat type of cleaning do you need?",
-        reply_markup=main_menu(message.from_user.id)
+        "Welcome to Cleaning Pros Team 🧼",
+        reply_markup=main_menu(message.chat.id)
     )
 
+
+# ---------- PRICES ----------
 
 @bot.message_handler(func=lambda m: m.text == "💰 Prices")
 def prices_menu(message):
 
-    bot.send_message(message.chat.id,
-"""
+    bot.send_message(
+        message.chat.id,
+        """
 Regular cleaning
 1 bedroom $120
 2 bedrooms $150
@@ -60,15 +65,18 @@ Move out cleaning
 1 bedroom $200
 2 bedrooms $250
 3 bedrooms $300
-""")
+"""
+    )
 
+
+# ---------- CONTACT ----------
 
 @bot.message_handler(func=lambda m: m.text == "📞 Contact")
 def contact(message):
 
     bot.send_message(
         message.chat.id,
-"""
+        """
 Cleaning Pros Team
 
 Phone: 2532020979
@@ -77,232 +85,252 @@ Email: manager@excellentsolution.online
     )
 
 
+# ---------- BOOK CLEANING ----------
+
 @bot.message_handler(func=lambda m: m.text == "🧹 Book cleaning")
-def book(message):
-
-    chat_id = message.chat.id
-
-    user_data[chat_id] = {"step":"cleaning"}
+def choose_cleaning(message):
 
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add("Regular cleaning","Deep cleaning","Move out cleaning")
 
-    bot.send_message(chat_id,"Choose cleaning type",reply_markup=markup)
+    markup.add("Regular cleaning")
+    markup.add("Deep cleaning")
+    markup.add("Move out cleaning")
+    markup.add("❌ Cancel booking")
+
+    bot.send_message(message.chat.id,"Choose cleaning type",reply_markup=markup)
 
 
-@bot.message_handler(func=lambda m: m.chat.id in user_data)
-def flow(message):
+# ---------- BEDROOMS ----------
+
+@bot.message_handler(func=lambda m: m.text in prices.keys())
+def bedrooms(message):
 
     chat_id = message.chat.id
-    step = user_data[chat_id]["step"]
-    text = message.text
 
-    if step == "cleaning":
+    user_data[chat_id] = {"cleaning": message.text}
 
-        user_data[chat_id]["cleaning"] = text
-        user_data[chat_id]["step"] = "bedrooms"
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
 
-        m = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        m.add("1","2","3")
+    markup.add("1","2","3")
+    markup.add("❌ Cancel booking")
 
-        bot.send_message(chat_id,"How many bedrooms?",reply_markup=m)
+    bot.send_message(chat_id,"How many bedrooms?",reply_markup=markup)
 
-    elif step == "bedrooms":
 
-        cleaning = user_data[chat_id]["cleaning"]
+# ---------- PRICE + DATE ----------
 
-        price = prices[cleaning][text]
+@bot.message_handler(func=lambda m: m.text in ["1","2","3"])
+def choose_date(message):
 
-        user_data[chat_id]["bedrooms"] = text
-        user_data[chat_id]["price"] = price
-        user_data[chat_id]["step"] = "date"
+    chat_id = message.chat.id
 
-        bot.send_message(chat_id,f"Estimated price: ${price}")
+    bedrooms = message.text
 
-        m = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    cleaning = user_data[chat_id]["cleaning"]
 
-        today = datetime.today()
+    price = prices[cleaning][bedrooms]
 
-        for i in range(1,5):
-            d = today + timedelta(days=i)
-            m.add(d.strftime("%b %d"))
+    user_data[chat_id]["bedrooms"] = bedrooms
+    user_data[chat_id]["price"] = price
 
-        bot.send_message(chat_id,"Choose cleaning date",reply_markup=m)
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
 
-    elif step == "date":
+    today = datetime.now()
 
-        user_data[chat_id]["date"] = text
-        user_data[chat_id]["step"] = "address"
+    for i in range(1,7):
+        d = today + timedelta(days=i)
+        markup.add(d.strftime("%b %d"))
 
-        bot.send_message(chat_id,"Send address")
+    markup.add("❌ Cancel booking")
 
-    elif step == "address":
+    bot.send_message(
+        chat_id,
+        f"Estimated price: ${price}\nChoose cleaning date",
+        reply_markup=markup
+    )
 
-        user_data[chat_id]["address"] = text
-        user_data[chat_id]["step"] = "name"
 
-        bot.send_message(chat_id,"Your name")
+# ---------- DATE ----------
 
-    elif step == "name":
+@bot.message_handler(func=lambda m: len(m.text)==6 and m.text[3]==" ")
+def extras(message):
 
-        user_data[chat_id]["name"] = text
-        user_data[chat_id]["step"] = "phone"
+    chat_id = message.chat.id
 
-        bot.send_message(chat_id,"Phone number")
+    user_data[chat_id]["date"] = message.text
 
-    elif step == "phone":
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
 
-        user_data[chat_id]["phone"] = text
-        user_data[chat_id]["step"] = "photo"
+    markup.add("Inside fridge")
+    markup.add("Inside oven")
+    markup.add("No extras")
+    markup.add("📅 Change date","❌ Cancel booking")
 
-        m = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        m.add("⏭ Skip photo")
+    bot.send_message(chat_id,"Add extras?",reply_markup=markup)
 
-        bot.send_message(chat_id,"Send photos or Skip",reply_markup=m)
 
-    elif step == "photo":
+# ---------- EXTRAS ----------
 
-        if text == "⏭ Skip photo":
-            finalize(chat_id)
+@bot.message_handler(func=lambda m: m.text in ["Inside fridge","Inside oven","No extras"])
+def address(message):
 
+    chat_id = message.chat.id
+
+    user_data[chat_id]["extras"] = message.text
+
+    bot.send_message(chat_id,"Send address or location")
+
+
+# ---------- LOCATION ----------
+
+@bot.message_handler(content_types=['location'])
+def location(message):
+
+    chat_id = message.chat.id
+
+    loc = message.location
+
+    user_data[chat_id]["location"] = f"https://maps.google.com/?q={loc.latitude},{loc.longitude}"
+
+    bot.send_message(chat_id,"Send phone number")
+
+
+# ---------- ADDRESS TEXT ----------
+
+@bot.message_handler(func=lambda m: "http" not in m.text and m.text[0].isdigit())
+def phone(message):
+
+    chat_id = message.chat.id
+
+    user_data[chat_id]["phone"] = message.text
+
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+
+    markup.add("Skip photo")
+    markup.add("📅 Change date","❌ Cancel booking")
+
+    bot.send_message(chat_id,"Send photos or Skip",reply_markup=markup)
+
+
+# ---------- PHOTO ----------
 
 @bot.message_handler(content_types=['photo'])
 def photo(message):
 
+    finalize_booking(message)
+
+
+# ---------- SKIP PHOTO ----------
+
+@bot.message_handler(func=lambda m: m.text == "Skip photo")
+def skip_photo(message):
+
+    finalize_booking(message)
+
+
+# ---------- FINALIZE BOOKING ----------
+
+def finalize_booking(message):
+
     chat_id = message.chat.id
 
-    if chat_id not in user_data:
+    data = user_data.get(chat_id)
+
+    if not data:
         return
 
-    if user_data[chat_id]["step"] != "photo":
-        return
-
-    bot.forward_message(ADMIN_ID,chat_id,message.message_id)
-
-    finalize(chat_id)
-
-
-def finalize(chat_id):
-
-    data = user_data[chat_id]
-
-    booking_id = f"B{get_booking_counter():03}"
-
-    bookings = load_bookings()
-
-    booking = {
-        "booking_id":booking_id,
-        "chat_id":chat_id,
-        "name":data["name"],
-        "phone":data["phone"],
-        "date":data["date"],
-        "price":data["price"]
-    }
-
-    bookings.append(booking)
-
-    save_bookings(bookings)
+    save_booking(data)
 
     bot.send_message(
         chat_id,
-        "We will contact you to confirm the time.",
+        "✅ Thank you! Your request has been sent.\nWe will contact you soon.",
         reply_markup=main_menu(chat_id)
     )
 
-    bot.send_message(
-        ADMIN_ID,
-f"""
+    text = f"""
 🧼 NEW CLEANING REQUEST
 
 Cleaning: {data['cleaning']}
 Bedrooms: {data['bedrooms']}
 Price: ${data['price']}
 
-Location:
-https://www.google.com/maps/search/?api=1&query={data['address']}
+Date: {data['date']}
+Extras: {data['extras']}
 
-Phone:
-{data['phone']}
-
-Client:
-{data['name']}
+Phone: {data['phone']}
 """
-)
+
+    bot.send_message(ADMIN_ID,text)
 
     user_data.pop(chat_id)
 
 
+# ---------- CANCEL ----------
+
+@bot.message_handler(func=lambda m: m.text == "❌ Cancel booking")
+def cancel(message):
+
+    chat_id = message.chat.id
+
+    if chat_id in user_data:
+        user_data.pop(chat_id)
+
+    bot.send_message(chat_id,"Booking cancelled",reply_markup=main_menu(chat_id))
+
+
+# ---------- CHANGE DATE ----------
+
+@bot.message_handler(func=lambda m: m.text == "📅 Change date")
+def change_date(message):
+
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+
+    today = datetime.now()
+
+    for i in range(1,7):
+        d = today + timedelta(days=i)
+        markup.add(d.strftime("%b %d"))
+
+    bot.send_message(message.chat.id,"Choose new date",reply_markup=markup)
+
+
+# ---------- ADMIN PANEL ----------
+
 @bot.message_handler(func=lambda m: m.text == "⚙️ Admin panel")
 def admin_panel(message):
 
-    if message.from_user.id != ADMIN_ID:
+    if message.chat.id != ADMIN_ID:
         return
 
-    m = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
 
-    m.add("📋 Today","📅 Tomorrow")
-    m.add("📂 All bookings")
-    m.add("💰 Income")
-    m.add("🧾 Send invoice")
+    markup.add("🧾 Invoice")
 
-    bot.send_message(message.chat.id,"Admin panel",reply_markup=m)
+    bot.send_message(message.chat.id,"Admin panel",reply_markup=markup)
 
 
-@bot.message_handler(func=lambda m: m.text == "📂 All bookings")
-def all_bookings(message):
+# ---------- INVOICE ----------
 
-    bookings = load_bookings()
+@bot.message_handler(func=lambda m: m.text == "🧾 Invoice")
+def invoice(message):
 
-    text = "ALL BOOKINGS\n\n"
-
-    for b in bookings:
-        text += f"{b['booking_id']} {b['date']} {b['name']}\n"
-
-    bot.send_message(message.chat.id,text)
-
-
-@bot.message_handler(func=lambda m: m.text == "💰 Income")
-def income(message):
+    if message.chat.id != ADMIN_ID:
+        return
 
     bookings = load_bookings()
 
-    total = sum(b["price"] for b in bookings)
+    if not bookings:
+        bot.send_message(message.chat.id,"No bookings yet")
+        return
 
-    bot.send_message(message.chat.id,f"Total income ${total}")
+    last = bookings[-1]
 
+    file = create_invoice(last)
 
-@bot.message_handler(func=lambda m: m.text == "🧾 Send invoice")
-def invoice_menu(message):
-
-    bookings = load_bookings()
-
-    m = types.ReplyKeyboardMarkup(resize_keyboard=True)
-
-    for b in bookings[-10:]:
-        m.add(b["booking_id"])
-
-    bot.send_message(message.chat.id,"Choose booking",reply_markup=m)
+    with open(file,"rb") as f:
+        bot.send_document(message.chat.id,f)
 
 
-@bot.message_handler(func=lambda m: m.text.startswith("B"))
-def send_invoice(message):
-
-    booking_id = message.text
-
-    bookings = load_bookings()
-
-    for b in bookings:
-
-        if b["booking_id"] == booking_id:
-
-            file = create_invoice(b)
-
-            with open(file,"rb") as f:
-                bot.send_document(b["chat_id"],f)
-
-            bot.send_message(message.chat.id,"Invoice sent")
-
-            return
-
+# ---------- RUN BOT ----------
 
 bot.infinity_polling()
