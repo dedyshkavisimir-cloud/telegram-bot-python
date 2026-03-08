@@ -1,6 +1,4 @@
 {
- "client": 1,
  "booking": 1,
- "invoice": 1,
- "income": 0
+ "invoice": 1
 }
