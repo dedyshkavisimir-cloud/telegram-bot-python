@@ -1,44 +1,89 @@
-import os
-import time
 import telebot
-from dotenv import load_dotenv
-from commands import register_commands
+from telebot import types
+import os
 
-# Load environment variables
-load_dotenv()
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
-# Replace 'TELEGRAM_BOT_TOKEN' with the token you received from BotFather
-TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-try:
-    bot = telebot.TeleBot(TOKEN)
-    register_commands(bot)
+ADMIN_ID = 123456789  # сюда потом поставим твой Telegram ID
 
-    @bot.message_handler(commands=['start', 'hello'])
-    def send_welcome(message):
-        """
-        Handle '/start' and '/hello' commands.
+bot = telebot.TeleBot(TOKEN)
 
-        Args:
-            message (telebot.types.Message): The message object.
-        """
-        bot.reply_to(message, "Hello! I'm a simple Telegram bot.")
+user_data = {}
 
-    @bot.message_handler(func=lambda msg: True)
-    def echo_all(message):
-        """
-        Echo all incoming text messages back to the user.
+@bot.message_handler(commands=['start'])
+def start(message):
 
-        Args:
-            message (telebot.types.Message): The message object.
-        """
-        bot.reply_to(message, message.text)
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
 
-    # Remove webhook to avoid conflicts with polling
-    bot.delete_webhook(drop_pending_updates=True)
-    bot.polling()
+    btn1 = types.KeyboardButton("Regular cleaning")
+    btn2 = types.KeyboardButton("Deep cleaning")
+    btn3 = types.KeyboardButton("Move out cleaning")
 
-except Exception as e:
-    print(f"CRITICAL ERROR: Failed to initialize bot with provided token. Error: {e}")
-    print("The application will hang to prevent a restart loop. Please fix the TELEGRAM_BOT_TOKEN environment variable.")
-    while True:
-        time.sleep(3600)
+    markup.add(btn1, btn2, btn3)
+
+    bot.send_message(
+        message.chat.id,
+        "Welcome to Cleaning Pros Team 🧼\n\nWhat type of cleaning do you need?",
+        reply_markup=markup
+    )
+
+@bot.message_handler(func=lambda m: m.text in ["Regular cleaning","Deep cleaning","Move out cleaning"])
+def cleaning_type(message):
+
+    chat_id = message.chat.id
+
+    user_data[chat_id] = {}
+    user_data[chat_id]["cleaning"] = message.text
+
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+
+    btn1 = types.KeyboardButton("1 bedroom")
+    btn2 = types.KeyboardButton("2 bedroom")
+    btn3 = types.KeyboardButton("3 bedroom")
+    btn4 = types.KeyboardButton("4+ bedroom")
+
+    markup.add(btn1, btn2, btn3, btn4)
+
+    bot.send_message(chat_id,"How many bedrooms?",reply_markup=markup)
+
+@bot.message_handler(func=lambda m: "bedroom" in m.text)
+def bedrooms(message):
+
+    chat_id = message.chat.id
+    user_data[chat_id]["bedrooms"] = message.text
+
+    bot.send_message(chat_id,"Send your address")
+
+@bot.message_handler(func=lambda m: True)
+def address(message):
+
+    chat_id = message.chat.id
+
+    if "address" not in user_data[chat_id]:
+
+        user_data[chat_id]["address"] = message.text
+
+        bot.send_message(chat_id,"Send your phone number")
+
+    else:
+
+        user_data[chat_id]["phone"] = message.text
+
+        data = user_data[chat_id]
+
+        text = f"""
+NEW CLEANING REQUEST
+
+Cleaning: {data['cleaning']}
+Bedrooms: {data['bedrooms']}
+Address: {data['address']}
+Phone: {data['phone']}
+"""
+
+        bot.send_message(ADMIN_ID,text)
+
+        bot.send_message(chat_id,"✅ Thank you! Your request has been sent.")
+
+        del user_data[chat_id]
+
+bot.infinity_polling()
