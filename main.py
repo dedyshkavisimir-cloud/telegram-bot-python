@@ -128,9 +128,26 @@ def photo(message):
 
     chat_id = message.chat.id
 
-    bot.forward_message(ADMIN_ID,chat_id,message.message_id)
+    bot.forward_message(ADMIN_ID, chat_id, message.message_id)
 
-    bot.send_message(chat_id,"Photo received 👍")
+    data = user_data.get(chat_id)
 
+    if data:
 
-bot.infinity_polling()
+        text = f"""
+🧼 NEW CLEANING REQUEST
+
+Cleaning: {data['cleaning']}
+Bedrooms: {data['bedrooms']}
+Price: ${data['price']}
+
+Location: {data.get('location','not sent')}
+
+Phone: {data['phone']}
+"""
+
+        bot.send_message(ADMIN_ID, text)
+
+        bot.send_message(chat_id, "✅ Thank you! Your request has been sent.")
+
+        user_data.pop(chat_id)
