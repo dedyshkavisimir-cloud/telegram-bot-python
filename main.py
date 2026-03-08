@@ -2,12 +2,11 @@ import telebot
 from telebot import types
 import os
 import json
-import threading
-import time
 from datetime import datetime, timedelta
 from reportlab.pdfgen import canvas
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+
 ADMIN_ID = 146998462
 
 bot = telebot.TeleBot(TOKEN)
@@ -40,6 +39,7 @@ def main_menu():
 
     markup.add("🧹 Book cleaning")
     markup.add("💰 Prices","📞 Contact")
+    markup.add("📅 Change booking","❌ Cancel booking")
 
     return markup
 
@@ -50,14 +50,14 @@ def start(message):
 
     bot.send_message(
         message.chat.id,
-        "Cleaning Pros Team",
+        "Welcome to Cleaning Pros Team",
         reply_markup=main_menu()
     )
 
 # ---------- PRICES ----------
 
 @bot.message_handler(func=lambda m: m.text=="💰 Prices")
-def prices_menu(message):
+def prices(message):
 
     bot.send_message(message.chat.id,
 """
@@ -82,24 +82,26 @@ Move out cleaning
 @bot.message_handler(func=lambda m: m.text=="📞 Contact")
 def contact(message):
 
-    bot.send_message(message.chat.id,
+    bot.send_message(
+        message.chat.id,
 """
 Cleaning Pros Team
 
-Phone 2532020979
-manager@excellentsolution.online
-""")
+Phone: 2532020979
+Email: manager@excellentsolution.online
+"""
+    )
 
 # ---------- BOOK ----------
 
 @bot.message_handler(func=lambda m: m.text=="🧹 Book cleaning")
 def book(message):
 
-    chat_id=message.chat.id
+    chat_id = message.chat.id
 
     user_data[chat_id]={"step":"cleaning"}
 
-    markup=types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
 
     markup.add("Regular cleaning")
     markup.add("Deep cleaning")
@@ -109,15 +111,11 @@ def book(message):
 
 # ---------- FLOW ----------
 
-@bot.message_handler(func=lambda message: True)
-def booking_flow(message):
+@bot.message_handler(func=lambda message: message.chat.id in user_data)
+def flow(message):
 
-    chat_id=message.chat.id
-
-    if chat_id not in user_data:
-        return
-
-    step=user_data[chat_id]["step"]
+    chat_id = message.chat.id
+    step = user_data[chat_id]["step"]
 
     if step=="cleaning":
 
@@ -135,7 +133,6 @@ def booking_flow(message):
     elif step=="bedrooms":
 
         cleaning=user_data[chat_id]["cleaning"]
-
         bedrooms=message.text
 
         price=prices[cleaning][bedrooms]
@@ -145,10 +142,7 @@ def booking_flow(message):
         user_data[chat_id]["step"]="date"
 
         markup=types.ReplyKeyboardMarkup(resize_keyboard=True)
-
-        markup.add("Tomorrow")
-        markup.add("In 2 days")
-        markup.add("In 3 days")
+        markup.add("Tomorrow","In 2 days","In 3 days")
 
         bot.send_message(chat_id,f"Estimated price ${price}")
         bot.send_message(chat_id,"Choose cleaning date",reply_markup=markup)
@@ -195,6 +189,12 @@ def booking_flow(message):
 
         bot.send_message(chat_id,"Send photos or Skip",reply_markup=markup)
 
+    elif step=="photo":
+
+        if message.text=="Skip photo":
+
+            finalize_booking(chat_id)
+
 # ---------- PHOTO ----------
 
 @bot.message_handler(content_types=['photo'])
@@ -207,18 +207,11 @@ def photo(message):
 
     bot.forward_message(ADMIN_ID,chat_id,message.message_id)
 
-    finalize_booking(message)
-
-@bot.message_handler(func=lambda m: m.text=="Skip photo")
-def skip(message):
-
-    finalize_booking(message)
+    finalize_booking(chat_id)
 
 # ---------- FINALIZE ----------
 
-def finalize_booking(message):
-
-    chat_id=message.chat.id
+def finalize_booking(chat_id):
 
     data=user_data[chat_id]
 
@@ -230,18 +223,15 @@ def finalize_booking(message):
 
     save_json("counters.json",counters)
 
-    data["booking_id"]=booking_id
-
     bookings=load_json("bookings.json")
 
     bookings.append({
         "booking_id":booking_id,
         "chat_id":chat_id,
-        "date":data["date"],
-        "price":data["price"],
         "name":data["name"],
         "phone":data["phone"],
-        "address":data["address"]
+        "date":data["date"],
+        "price":data["price"]
     })
 
     save_json("bookings.json",bookings)
@@ -259,16 +249,37 @@ NEW BOOKING
 
 {booking_id}
 
-Client {data['name']}
-Phone {data['phone']}
-Price ${data['price']}
-Date {data['date']}
+Client: {data['name']}
+Phone: {data['phone']}
+Date: {data['date']}
+Price: ${data['price']}
 """
     )
 
     user_data.pop(chat_id)
 
-# ---------- ADMIN PANEL ----------
+# ---------- CANCEL ----------
+
+@bot.message_handler(func=lambda m: m.text=="❌ Cancel booking")
+def cancel(message):
+
+    if message.chat.id in user_data:
+        user_data.pop(message.chat.id)
+
+    bot.send_message(
+        message.chat.id,
+        "Booking cancelled",
+        reply_markup=main_menu()
+    )
+
+# ---------- CHANGE ----------
+
+@bot.message_handler(func=lambda m: m.text=="📅 Change booking")
+def change(message):
+
+    book(message)
+
+# ---------- ADMIN ----------
 
 @bot.message_handler(commands=['admin'])
 def admin(message):
@@ -323,7 +334,7 @@ def tomorrow(message):
 
     bot.send_message(message.chat.id,text)
 
-# ---------- ALL ----------
+# ---------- ALL BOOKINGS ----------
 
 @bot.message_handler(func=lambda m: m.text=="📂 All bookings")
 def all_bookings(message):
@@ -351,28 +362,5 @@ def income(message):
         total+=b["price"]
 
     bot.send_message(message.chat.id,f"Total income ${total}")
-
-# ---------- REMINDER LOOP ----------
-
-def reminder_loop():
-
-    while True:
-
-        bookings=load_json("bookings.json")
-
-        tomorrow=(datetime.today()+timedelta(days=1)).strftime("%B %d")
-
-        for b in bookings:
-
-            if b["date"]==tomorrow:
-
-                bot.send_message(
-                    b["chat_id"],
-                    "Reminder\nYour cleaning is tomorrow"
-                )
-
-        time.sleep(43200)
-
-threading.Thread(target=reminder_loop).start()
 
 bot.infinity_polling()
