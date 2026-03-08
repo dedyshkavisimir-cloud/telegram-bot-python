@@ -3,7 +3,7 @@ from telebot import types
 from datetime import datetime, timedelta
 
 from config import TOKEN, ADMIN_ID
-from storage import load_bookings, save_booking
+from storage import load_bookings, save_bookings
 from invoice import create_invoice
 
 bot = telebot.TeleBot(TOKEN)
