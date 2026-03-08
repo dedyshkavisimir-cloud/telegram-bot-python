@@ -4,7 +4,7 @@ import os
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
-ADMIN_ID = 123456789  # поставим твой Telegram ID
+ADMIN_ID = 146998462  # поставим твой Telegram ID
 
 bot = telebot.TeleBot(TOKEN)
 
