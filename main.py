@@ -151,3 +151,6 @@ Phone: {data['phone']}
         bot.send_message(chat_id, "✅ Thank you! Your request has been sent.")
 
         user_data.pop(chat_id)
+
+bot.delete_webhook()
+bot.infinity_polling()
