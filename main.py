@@ -239,7 +239,7 @@ def finalize_booking(message):
     if not data:
         return
 
-    save_booking(data)
+    save_bookings(data)
 
     bot.send_message(
         chat_id,
