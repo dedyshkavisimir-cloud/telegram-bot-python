@@ -1,9 +1,9 @@
 import telebot
 from telebot import types
 import os
+import json
 from reportlab.pdfgen import canvas
 from datetime import datetime
-import random
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
@@ -19,67 +19,95 @@ prices = {
     "Move out cleaning": {"1":200,"2":250,"3":300}
 }
 
+# ---------- COUNTERS ----------
+
+def load_counters():
+
+    with open("counters.json") as f:
+        return json.load(f)
+
+def save_counters(data):
+
+    with open("counters.json","w") as f:
+        json.dump(data,f)
+
+
 # ---------- INVOICE ----------
 
 def create_invoice(data):
 
-    invoice_number = random.randint(1000,9999)
-    filename = f"invoice_{invoice_number}.pdf"
+    counters = load_counters()
+
+    invoice_id = f"INV{counters['invoice']:03}"
+
+    counters["invoice"] += 1
+
+    save_counters(counters)
+
+    filename = f"{invoice_id}.pdf"
 
     c = canvas.Canvas(filename)
 
-    c.setFont("Helvetica-Bold",22)
-    c.drawCentredString(300,810,"CLEANING PROS TEAM")
-
-    c.setFont("Helvetica",11)
-    c.drawCentredString(300,790,"Phone: 253-202-0979")
-    c.drawCentredString(300,775,"Email: manager@excellentsolution.online")
-
-    c.line(50,760,550,760)
+    c.drawImage("logo.png",200,760,width=200,height=80)
 
     c.setFont("Helvetica-Bold",18)
-    c.drawString(50,730,"INVOICE")
+    c.drawString(50,720,"INVOICE")
 
     c.setFont("Helvetica",12)
-    c.drawString(50,705,f"Invoice #: {invoice_number}")
-    c.drawString(400,705,f"Date: {datetime.now().strftime('%b %d %Y')}")
+
+    c.drawString(50,700,f"Invoice ID: {invoice_id}")
+    c.drawString(50,680,f"Booking ID: {data['booking_id']}")
+
+    c.drawString(400,700,f"Date: {datetime.now().strftime('%b %d %Y')}")
+
+    c.line(50,660,550,660)
 
     c.setFont("Helvetica-Bold",14)
-    c.drawString(50,660,"Customer Information")
+    c.drawString(50,630,"Customer")
 
     c.setFont("Helvetica",12)
-    c.drawString(50,640,f"Name: {data['name']}")
-    c.drawString(50,620,f"Phone: {data['phone']}")
-    c.drawString(50,600,f"Address: {data['address']}")
-    c.drawString(50,580,f"Cleaning Date: {data['date']}")
+
+    c.drawString(50,610,f"Client ID: {data['client_id']}")
+    c.drawString(50,590,f"Name: {data['name']}")
+    c.drawString(50,570,f"Phone: {data['phone']}")
+    c.drawString(50,550,f"Address: {data['address']}")
+
+    c.drawString(50,530,f"Cleaning date: {data['date']}")
 
     c.setFont("Helvetica-Bold",14)
-    c.drawString(50,540,"Service Details")
+    c.drawString(50,490,"Service")
 
-    c.line(50,520,550,520)
+    c.line(50,470,550,470)
 
     c.setFont("Helvetica-Bold",12)
-    c.drawString(50,500,"Service")
-    c.drawString(260,500,"Bedrooms")
-    c.drawString(450,500,"Price")
 
-    c.line(50,490,550,490)
+    c.drawString(50,450,"Service")
+    c.drawString(250,450,"Bedrooms")
+    c.drawString(450,450,"Price")
+
+    c.line(50,440,550,440)
 
     c.setFont("Helvetica",12)
-    c.drawString(50,470,data['cleaning'])
-    c.drawString(280,470,data['bedrooms'])
-    c.drawString(450,470,f"${data['price']}")
 
-    c.line(50,450,550,450)
-
-    c.setFont("Helvetica-Bold",15)
-    c.drawString(350,420,"TOTAL:")
+    c.drawString(50,420,data['cleaning'])
+    c.drawString(270,420,data['bedrooms'])
     c.drawString(450,420,f"${data['price']}")
 
     c.line(50,400,550,400)
 
+    c.setFont("Helvetica-Bold",14)
+
+    c.drawString(350,370,"TOTAL:")
+    c.drawString(450,370,f"${data['price']}")
+
+    c.line(50,350,550,350)
+
     c.setFont("Helvetica",11)
-    c.drawCentredString(300,370,"Thank you for choosing Cleaning Pros Team!")
+
+    c.drawCentredString(300,320,"Phone: 253-202-0979")
+    c.drawCentredString(300,305,"Email: manager@excellentsolution.online")
+
+    c.drawCentredString(300,280,"Thank you for choosing Cleaning Pros Team!")
 
     c.save()
 
@@ -107,7 +135,7 @@ def start(message):
 # ---------- PRICES ----------
 
 @bot.message_handler(func=lambda m: m.text == "💰 Prices")
-def prices_list(message):
+def price(message):
 
     text = """
 Regular cleaning
@@ -134,14 +162,10 @@ Move out cleaning
 @bot.message_handler(func=lambda m: m.text == "📞 Contact")
 def contact(message):
 
-    text = """
-Cleaning Pros Team
-
-Phone: 253-202-0979
-Email: manager@excellentsolution.online
-"""
-
-    bot.send_message(message.chat.id,text)
+    bot.send_message(
+        message.chat.id,
+        "Phone: 2532020979\nEmail: manager@excellentsolution.online"
+    )
 
 
 # ---------- BOOK CLEANING ----------
@@ -162,10 +186,8 @@ def book(message):
     bot.send_message(chat_id,"Choose cleaning type",reply_markup=markup)
 
 
-# ---------- CLEANING TYPE ----------
-
 @bot.message_handler(func=lambda m: m.text in prices)
-def cleaning_type(message):
+def cleaning(message):
 
     chat_id = message.chat.id
 
@@ -178,15 +200,14 @@ def cleaning_type(message):
     bot.send_message(chat_id,"How many bedrooms?",reply_markup=markup)
 
 
-# ---------- BEDROOMS ----------
-
 @bot.message_handler(func=lambda m: m.text in ["1","2","3"])
 def bedrooms(message):
 
     chat_id = message.chat.id
 
-    bedrooms = message.text
     cleaning = user_data[chat_id]["cleaning"]
+
+    bedrooms = message.text
 
     price = prices[cleaning][bedrooms]
 
@@ -195,46 +216,38 @@ def bedrooms(message):
 
     bot.send_message(chat_id,f"Estimated price: ${price}")
 
-    bot.send_message(chat_id,"Send cleaning date (example: March 15)")
+    bot.send_message(chat_id,"Send cleaning date")
 
 
-# ---------- DATE ----------
-
-@bot.message_handler(func=lambda m: "date" not in user_data.get(m.chat.id, {}))
+@bot.message_handler(func=lambda m: "date" not in user_data.get(m.chat.id,{}))
 def date(message):
 
     chat_id = message.chat.id
 
     user_data[chat_id]["date"] = message.text
 
-    bot.send_message(chat_id,"Send your address")
+    bot.send_message(chat_id,"Send address")
 
 
-# ---------- ADDRESS ----------
-
-@bot.message_handler(func=lambda m: "address" not in user_data.get(m.chat.id, {}))
+@bot.message_handler(func=lambda m: "address" not in user_data.get(m.chat.id,{}))
 def address(message):
 
     chat_id = message.chat.id
 
     user_data[chat_id]["address"] = message.text
 
-    bot.send_message(chat_id,"What is your name?")
+    bot.send_message(chat_id,"Your name?")
 
 
-# ---------- NAME ----------
-
-@bot.message_handler(func=lambda m: "name" not in user_data.get(m.chat.id, {}))
+@bot.message_handler(func=lambda m: "name" not in user_data.get(m.chat.id,{}))
 def name(message):
 
     chat_id = message.chat.id
 
     user_data[chat_id]["name"] = message.text
 
-    bot.send_message(chat_id,"Send phone number")
+    bot.send_message(chat_id,"Phone number?")
 
-
-# ---------- PHONE ----------
 
 @bot.message_handler(func=lambda m: m.text.isdigit())
 def phone(message):
@@ -252,15 +265,30 @@ def finalize_booking(message):
 
     chat_id = message.chat.id
 
-    data = user_data.get(chat_id)
+    data = user_data[chat_id]
+
+    counters = load_counters()
+
+    client_id = f"C{counters['client']:03}"
+    booking_id = f"B{counters['booking']:03}"
+
+    counters["client"] += 1
+    counters["booking"] += 1
+
+    save_counters(counters)
+
+    data["client_id"] = client_id
+    data["booking_id"] = booking_id
 
     text = f"""
 NEW BOOKING
 
-Name: {data['name']}
+Booking: {booking_id}
+
+Client: {data['name']}
 Phone: {data['phone']}
 
-Cleaning: {data['cleaning']}
+Service: {data['cleaning']}
 Bedrooms: {data['bedrooms']}
 
 Date: {data['date']}
@@ -273,30 +301,12 @@ Price: ${data['price']}
 
     bot.send_message(ADMIN_ID,text)
 
-    invoice = create_invoice(data)
-
-    with open(invoice,"rb") as f:
-
-        bot.send_document(chat_id,f)
-
-    bot.send_message(chat_id,"✅ Booking confirmed!")
+    bot.send_message(
+        chat_id,
+        "✅ Your request has been received.\n\nWe will contact you shortly to confirm the time."
+    )
 
     user_data.pop(chat_id)
 
-
-# ---------- CANCEL ----------
-
-@bot.message_handler(func=lambda m: m.text == "❌ Cancel booking")
-def cancel(message):
-
-    bot.send_message(message.chat.id,"Booking cancelled.")
-
-
-# ---------- CHANGE DATE ----------
-
-@bot.message_handler(func=lambda m: m.text == "📅 Change booking")
-def change(message):
-
-    bot.send_message(message.chat.id,"Send new cleaning date")
 
 bot.infinity_polling()
