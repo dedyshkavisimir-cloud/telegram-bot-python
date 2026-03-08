@@ -41,7 +41,7 @@ def start(message):
 
 
 @bot.message_handler(func=lambda m: m.text == "💲 Prices")
-def prices(message):
+def prices_menu(message):
 
     bot.send_message(
         message.chat.id,
