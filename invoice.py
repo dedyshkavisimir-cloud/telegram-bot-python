@@ -1,37 +1,40 @@
-from reportlab.pdfgen import canvas
-from config import COMPANY, PHONE, EMAIL
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.pagesizes import letter
 
 
-def create_invoice(booking):
+def create_invoice(data, filename):
 
-    file = f"{booking['booking_id']}.pdf"
+    styles = getSampleStyleSheet()
 
-    c = canvas.Canvas(file)
+    story = []
 
     try:
-        c.drawImage("logo.png", 40, 740, width=120, height=60)
+        logo = Image("logo.png", width=120, height=120)
+        story.append(logo)
     except:
         pass
 
-    c.setFont("Helvetica-Bold", 22)
-    c.drawString(200, 760, "INVOICE")
+    story.append(Spacer(1,20))
 
-    c.setFont("Helvetica", 12)
+    story.append(Paragraph("Cleaning Pros Team", styles["Title"]))
+    story.append(Spacer(1,20))
 
-    c.drawString(40, 700, COMPANY)
-    c.drawString(40, 680, PHONE)
-    c.drawString(40, 660, EMAIL)
+    story.append(Paragraph(f"Client: {data['name']}", styles["Normal"]))
+    story.append(Paragraph(f"Phone: {data['phone']}", styles["Normal"]))
+    story.append(Paragraph(f"Address: {data['address']}", styles["Normal"]))
 
-    c.line(40, 640, 550, 640)
+    story.append(Spacer(1,20))
 
-    c.drawString(40, 610, f"Invoice: {booking['booking_id']}")
-    c.drawString(40, 590, f"Client: {booking['name']}")
-    c.drawString(40, 570, f"Phone: {booking['phone']}")
-    c.drawString(40, 550, f"Date: {booking['date']}")
+    story.append(Paragraph(f"Service: {data['cleaning']}", styles["Normal"]))
+    story.append(Paragraph(f"Bedrooms: {data['bedrooms']}", styles["Normal"]))
+    story.append(Paragraph(f"Date: {data['date']}", styles["Normal"]))
+    story.append(Paragraph(f"Extras: {data['extras']}", styles["Normal"]))
 
-    c.drawString(40, 500, f"Service: Cleaning")
-    c.drawString(40, 480, f"Total: ${booking['price']}")
+    story.append(Spacer(1,20))
 
-    c.save()
+    story.append(Paragraph(f"Total: ${data['price']}", styles["Heading2"]))
 
-    return file
+    pdf = SimpleDocTemplate(filename, pagesize=letter)
+
+    pdf.build(story)
