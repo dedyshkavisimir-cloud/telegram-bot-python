@@ -2,10 +2,9 @@ import telebot
 from telebot import types
 import os
 import json
-from datetime import datetime, timedelta
-import schedule
-import time
 import threading
+import time
+from datetime import datetime, timedelta
 from reportlab.pdfgen import canvas
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -41,7 +40,6 @@ def main_menu():
 
     markup.add("🧹 Book cleaning")
     markup.add("💰 Prices","📞 Contact")
-    markup.add("📅 Change booking","❌ Cancel booking")
 
     return markup
 
@@ -52,7 +50,7 @@ def start(message):
 
     bot.send_message(
         message.chat.id,
-        "Welcome to Cleaning Pros Team",
+        "Cleaning Pros Team",
         reply_markup=main_menu()
     )
 
@@ -84,20 +82,20 @@ Move out cleaning
 @bot.message_handler(func=lambda m: m.text=="📞 Contact")
 def contact(message):
 
-    bot.send_message(
-        message.chat.id,
-"""Cleaning Pros Team
+    bot.send_message(message.chat.id,
+"""
+Cleaning Pros Team
 
-Phone: 2532020979
-Email: manager@excellentsolution.online"""
-    )
+Phone 2532020979
+manager@excellentsolution.online
+""")
 
 # ---------- BOOK ----------
 
 @bot.message_handler(func=lambda m: m.text=="🧹 Book cleaning")
 def book(message):
 
-    chat_id = message.chat.id
+    chat_id=message.chat.id
 
     user_data[chat_id]={"step":"cleaning"}
 
@@ -121,7 +119,6 @@ def booking_flow(message):
 
     step=user_data[chat_id]["step"]
 
-    # cleaning
     if step=="cleaning":
 
         if message.text not in prices:
@@ -135,7 +132,6 @@ def booking_flow(message):
 
         bot.send_message(chat_id,"How many bedrooms?",reply_markup=markup)
 
-    # bedrooms
     elif step=="bedrooms":
 
         cleaning=user_data[chat_id]["cleaning"]
@@ -148,18 +144,33 @@ def booking_flow(message):
         user_data[chat_id]["price"]=price
         user_data[chat_id]["step"]="date"
 
-        bot.send_message(chat_id,f"Estimated price ${price}")
-        bot.send_message(chat_id,"Cleaning date YYYY-MM-DD")
+        markup=types.ReplyKeyboardMarkup(resize_keyboard=True)
 
-    # date
+        markup.add("Tomorrow")
+        markup.add("In 2 days")
+        markup.add("In 3 days")
+
+        bot.send_message(chat_id,f"Estimated price ${price}")
+        bot.send_message(chat_id,"Choose cleaning date",reply_markup=markup)
+
     elif step=="date":
 
-        user_data[chat_id]["date"]=message.text
+        today=datetime.today()
+
+        if message.text=="Tomorrow":
+            date=today+timedelta(days=1)
+
+        elif message.text=="In 2 days":
+            date=today+timedelta(days=2)
+
+        else:
+            date=today+timedelta(days=3)
+
+        user_data[chat_id]["date"]=date.strftime("%B %d")
         user_data[chat_id]["step"]="address"
 
         bot.send_message(chat_id,"Send address")
 
-    # address
     elif step=="address":
 
         user_data[chat_id]["address"]=message.text
@@ -167,7 +178,6 @@ def booking_flow(message):
 
         bot.send_message(chat_id,"Your name")
 
-    # name
     elif step=="name":
 
         user_data[chat_id]["name"]=message.text
@@ -175,7 +185,6 @@ def booking_flow(message):
 
         bot.send_message(chat_id,"Phone number")
 
-    # phone
     elif step=="phone":
 
         user_data[chat_id]["phone"]=message.text
@@ -184,7 +193,7 @@ def booking_flow(message):
         markup=types.ReplyKeyboardMarkup(resize_keyboard=True)
         markup.add("Skip photo")
 
-        bot.send_message(chat_id,"Send photo or Skip",reply_markup=markup)
+        bot.send_message(chat_id,"Send photos or Skip",reply_markup=markup)
 
 # ---------- PHOTO ----------
 
@@ -228,7 +237,11 @@ def finalize_booking(message):
     bookings.append({
         "booking_id":booking_id,
         "chat_id":chat_id,
-        "date":data["date"]
+        "date":data["date"],
+        "price":data["price"],
+        "name":data["name"],
+        "phone":data["phone"],
+        "address":data["address"]
     })
 
     save_json("bookings.json",bookings)
@@ -244,92 +257,122 @@ def finalize_booking(message):
 f"""
 NEW BOOKING
 
-Booking {booking_id}
+{booking_id}
 
-Client: {data['name']}
-Phone: {data['phone']}
-Address: {data['address']}
-
-Service: {data['cleaning']}
-Bedrooms: {data['bedrooms']}
-
-Price: ${data['price']}
-Date: {data['date']}
+Client {data['name']}
+Phone {data['phone']}
+Price ${data['price']}
+Date {data['date']}
 """
     )
 
     user_data.pop(chat_id)
 
-# ---------- INVOICE ----------
+# ---------- ADMIN PANEL ----------
 
-def create_invoice(data):
+@bot.message_handler(commands=['admin'])
+def admin(message):
 
-    counters=load_json("counters.json")
+    if message.from_user.id!=ADMIN_ID:
+        return
 
-    invoice_id=f"INV{counters['invoice']:03}"
+    markup=types.ReplyKeyboardMarkup(resize_keyboard=True)
 
-    counters["invoice"]+=1
+    markup.add("📋 Today")
+    markup.add("📅 Tomorrow")
+    markup.add("📂 All bookings")
+    markup.add("💰 Income")
 
-    save_json("counters.json",counters)
+    bot.send_message(message.chat.id,"Admin panel",reply_markup=markup)
 
-    filename=f"{invoice_id}.pdf"
+# ---------- TODAY ----------
 
-    c=canvas.Canvas(filename)
-
-    c.drawImage("logo.png",200,750,width=200,height=80)
-
-    c.setFont("Helvetica-Bold",18)
-    c.drawString(50,700,"INVOICE")
-
-    c.setFont("Helvetica",12)
-
-    c.drawString(50,670,f"Invoice ID: {invoice_id}")
-    c.drawString(50,650,f"Booking ID: {data['booking_id']}")
-
-    c.drawString(50,620,f"Client: {data['name']}")
-    c.drawString(50,600,f"Phone: {data['phone']}")
-    c.drawString(50,580,f"Address: {data['address']}")
-
-    c.drawString(50,540,f"Service: {data['cleaning']}")
-    c.drawString(50,520,f"Bedrooms: {data['bedrooms']}")
-
-    c.drawString(50,490,f"Total: ${data['price']}")
-
-    c.drawCentredString(300,430,"Phone 2532020979")
-    c.drawCentredString(300,410,"manager@excellentsolution.online")
-
-    c.save()
-
-    return filename
-
-# ---------- REMINDER ----------
-
-def reminder():
+@bot.message_handler(func=lambda m: m.text=="📋 Today")
+def today(message):
 
     bookings=load_json("bookings.json")
 
-    now=datetime.now()
+    today=datetime.today().strftime("%B %d")
 
-    for booking in bookings:
+    text="TODAY BOOKINGS\n\n"
 
-        date=datetime.strptime(booking["date"],"%Y-%m-%d")
+    for b in bookings:
 
-        if date-timedelta(hours=24)<=now<=date-timedelta(hours=23):
+        if b["date"]==today:
 
-            bot.send_message(
-                booking["chat_id"],
-                "Reminder\nYour cleaning is tomorrow"
-            )
+            text+=f"{b['booking_id']} {b['name']}\n"
 
-def scheduler():
+    bot.send_message(message.chat.id,text)
 
-    schedule.every(1).hours.do(reminder)
+# ---------- TOMORROW ----------
+
+@bot.message_handler(func=lambda m: m.text=="📅 Tomorrow")
+def tomorrow(message):
+
+    bookings=load_json("bookings.json")
+
+    tomorrow=(datetime.today()+timedelta(days=1)).strftime("%B %d")
+
+    text="TOMORROW BOOKINGS\n\n"
+
+    for b in bookings:
+
+        if b["date"]==tomorrow:
+
+            text+=f"{b['booking_id']} {b['name']}\n"
+
+    bot.send_message(message.chat.id,text)
+
+# ---------- ALL ----------
+
+@bot.message_handler(func=lambda m: m.text=="📂 All bookings")
+def all_bookings(message):
+
+    bookings=load_json("bookings.json")
+
+    text="ALL BOOKINGS\n\n"
+
+    for b in bookings:
+
+        text+=f"{b['booking_id']} {b['date']} {b['name']}\n"
+
+    bot.send_message(message.chat.id,text)
+
+# ---------- INCOME ----------
+
+@bot.message_handler(func=lambda m: m.text=="💰 Income")
+def income(message):
+
+    bookings=load_json("bookings.json")
+
+    total=0
+
+    for b in bookings:
+        total+=b["price"]
+
+    bot.send_message(message.chat.id,f"Total income ${total}")
+
+# ---------- REMINDER LOOP ----------
+
+def reminder_loop():
 
     while True:
 
-        schedule.run_pending()
-        time.sleep(10)
+        bookings=load_json("bookings.json")
 
-threading.Thread(target=scheduler).start()
+        tomorrow=(datetime.today()+timedelta(days=1)).strftime("%B %d")
+
+        for b in bookings:
+
+            if b["date"]==tomorrow:
+
+                bot.send_message(
+                    b["chat_id"],
+                    "Reminder\nYour cleaning is tomorrow"
+                )
+
+        time.sleep(43200)
+
+threading.Thread(target=reminder_loop).start()
 
 bot.infinity_polling()
